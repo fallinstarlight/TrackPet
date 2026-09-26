@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Login</title>
+  <link rel="stylesheet" href="styles/style.css" />
+</head>
+<body>
+  <!-- Background image: full width, top half of the screen -->
+  <div class="hero" aria-hidden="true"></div>
+
+  <!-- Centered login form -->
+  <main class="login-container">
+    <form class="login-form" id="loginForm" novalidate>
+      <h1 class="login-form__title">Welcome back</h1>
+      <p class="login-form__subtitle">Log in to continue to your account</p>
+
+      <div class="field">
+        <label for="identifier">Username or Email</label>
+        <input
+          type="text"
+          id="identifier"
+          name="identifier"
+          placeholder="you@example.com"
+          autocomplete="disable"
+          required
+        />
+        <span class="field__error" id="identifierError"></span>
+      </div>
+
+      <div class="field">
+        <label for="password">Password</label>
+        <input
+          type="password"
+          id="password"
+          name="password"
+          placeholder="Enter your password"
+          autocomplete="current-password"
+          required
+        />
+        <span class="field__error" id="passwordError"></span>
+      </div>
+
+      <div class="form-row">
+        <button type="button" class="btn btn--link" id="forgotPassword">
+          Forgot password?
+        </button>
+      </div>
+
+      <button type="submit" class="btn btn--primary">Log in</button>
+      <button type="button" class="btn btn--outline" id="signUp">Sign up</button>
+
+      <p class="form-message" id="formMessage" role="status"></p>
+    </form>
+  </main>
+
+  <script src="scripts/script.js"></script>
+</body>
+</html>
