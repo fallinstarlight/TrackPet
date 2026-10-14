@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Login</title>
+  <title>TrackPet Login</title>
   <link rel="stylesheet" href="styles/style.css" />
 </head>
 <body>
@@ -23,7 +23,7 @@
           id="identifier"
           name="identifier"
           placeholder="you@example.com"
-          autocomplete="disable"
+          autocomplete="off"
           required
         />
         <span class="field__error" id="identifierError"></span>
@@ -55,6 +55,7 @@
     </form>
   </main>
 
-  <script src="scripts/script.js"></script>
+  <script type="module" src="scripts/login.js"></script>
+  <script src="scripts/api/ApiRequest.js"></script>
 </body>
 </html>

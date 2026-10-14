@@ -1,5 +1,13 @@
 <?php
-class UserResponse{
+namespace TrackPet\model\response;
+
+/**
+ * Class to handle responses to the controller, which then encodes them and sends them to the user
+ * 
+ * The object may be initialized without any parameters and its attributes shall be set after based on the needs of the response
+ * 
+ */
+class Response{
 
     public const FLAG_SUCCESS = 0;
     public const FLAG_NOT_FOUND = 1;

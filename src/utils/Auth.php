@@ -1,5 +1,6 @@
 <?php
 /* Set of functions for handling user authentication and session management */
+namespace TrackPet\utils;
 
 class Auth
 {
@@ -80,7 +81,7 @@ class Auth
 
     public static function requireLogIn(){
         if(!self::isLoggedIn()){
-            http_response_code(403);
+            http_response_code(401);
             die(json_encode(["status"=> "Error", "message" => "Log in is needed to access this resource"]));
         }
     }

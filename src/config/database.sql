@@ -1,0 +1,37 @@
+DROP SCHEMA IF EXISTS TrackPet;
+
+CREATE SCHEMA IF NOT EXISTS TrackPet;
+
+USE TrackPet;
+
+CREATE TABLE Users (
+    userId BINARY(16) NOT NULL PRIMARY KEY,
+    firstName VARCHAR(50) NOT NULL,
+    surname VARCHAR(50) NOT NULL,
+    username VARCHAR(25) NOT NULL UNIQUE,
+    email VARCHAR(50) NOT NULL UNIQUE,
+    passwordHash VARCHAR(255) NOT NULL,
+    phone VARCHAR(15) UNIQUE,
+    profilePhoto VARCHAR(350) NULL,
+    status ENUM('active', 'inactive') NOT NULL DEFAULT 'active',
+    lastLogin DATETIME NULL,
+    creationDate DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    modificationDate DATETIME ON UPDATE CURRENT_TIMESTAMP
+);
+
+CREATE TABLE Pets(
+  petId BINARY(16) NOT NULL PRIMARY KEY,
+  petName VARCHAR(100) NOT NULL,
+  petSpecies VARCHAR(100) NOT NULL,
+  petColour VARCHAR(100) NOT NULL,
+  petWeight DOUBLE(10, 2),
+  petHeight DOUBLE(10, 2),
+  petLenght DOUBLE(10, 2),
+  isLost BOOLEAN NOT NULL DEFAULT 0,
+  petDescription VARCHAR(500),
+  ownerId BINARY(16) NOT NULL,
+  isActive BOOLEAN NOT NULL DEFAULT 1,
+    CONSTRAINT ownerOwnsPet FOREIGN KEY (ownerId) REFERENCES Users(userId),
+  creationDate DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  modificationDate DATETIME ON UPDATE CURRENT_TIMESTAMP
+);

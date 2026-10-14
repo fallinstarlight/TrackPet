@@ -1,4 +1,5 @@
 <?php
+namespace TrackPet\utils;
 
 class LoginFunctions{
     public static function isEmail(string $value): bool
@@ -15,10 +16,11 @@ class LoginFunctions{
     {
         Auth::start();
         Auth::regenerate();
-        Auth::set('userId', $data['id']);
-        Auth::set('name', $data['name']);
+        Auth::set('userId', $data['userId']);
+        Auth::set('name', $data['firstName']);
         Auth::set('surname', $data['surname']);
         Auth::set('username', $data['username']);
+        Auth::set('pets', $data['pets']);
     }
 
     public static function logout()
