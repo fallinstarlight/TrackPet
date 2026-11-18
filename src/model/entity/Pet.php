@@ -21,6 +21,7 @@ class Pet
     public ?float  $petLenght = null;
     public ?bool   $isLost = null;
     public ?string $petDescription = null;
+    public ?string $petPhoto = null;
     public ?string $ownerId = null;
     public ?bool   $isActive = null;
     public ?string $creationDate = null;
@@ -29,7 +30,7 @@ class Pet
     public function __construct(array $data)
     {
         foreach ($data as $key => $value) {
-            if (property_exists($this, $key)) {
+            if (in_array($key, ['petId', 'ownerId', 'petName', 'petSpecies', 'petColour', 'petWeight', 'petHeight', 'petLenght', 'petDescription', 'petPhoto'], true)) {
                 $this->$key = $value;
             }
         }
@@ -62,15 +63,22 @@ class Pet
         }
 
         foreach ($maxLengths as $field => $max) {
+            if ($isEdit && in_array($field, $required, true) && $this->$field === '') {
+                $errors[] = "$field cannot be empty";
+            }
             if (isset($this->$field) && mb_strlen($this->$field) > $max) {
                 $errors[] = "$field exceeds $max char limit";
             }
         }
 
         foreach (['petWeight', 'petHeight', 'petLenght'] as $field) {
-            if (isset($this->$field) && $this->$field !== null && !is_numeric($this->$field)) {
-                $errors[] = "$field must be numeric";
+            if ($this->$field !== null && (!is_finite($this->$field) || $this->$field < 0.01 || $this->$field > 99999999.99)) {
+                $errors[] = "$field must be between 0.01 and 99999999.99";
             }
+        }
+
+        if ($this->petPhoto !== null && !preg_match('/\Aassets\/img\/uploads\/[a-f0-9]{32}\.(?:jpg|jpeg|png|gif|webp)\z/', $this->petPhoto)) {
+            $errors[] = 'petPhoto must be an uploaded image path';
         }
 
         return $errors;

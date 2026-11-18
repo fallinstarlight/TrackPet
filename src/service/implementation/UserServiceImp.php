@@ -1,249 +1,135 @@
 <?php
-
 namespace TrackPet\service\implementation;
 
+use InvalidArgumentException;
+use PDOException;
 use TrackPet\service\IUserService;
 use TrackPet\repository\UserRepository;
 use TrackPet\model\response\Response;
 use TrackPet\model\entity\User;
-use TrackPet\utils\LoginFunctions;
-use TrackPet\utils\DbErrorHandler;
-use PDOException;
-use TrackPet\repository\PetRepository;
-use TrackPet\utils\Uuid;
-use TrackPet\utils\Validator;
+use TrackPet\utils\{Auth, DbErrorHandler, LoginFunctions, Uuid, Validator};
 
 class UserServiceImp implements IUserService
 {
-    private UserRepository $userRepository;
-
-    public function __construct(UserRepository $userRepository)
-    {
-        $this->userRepository = $userRepository;
-    }
+    public function __construct(private UserRepository $userRepository) {}
 
     public function login(string $username, string $password): Response
     {
-        $response = new Response;
-
-        $isEmail = LoginFunctions::isEmail($username);
         try {
-            $loginInfo = $this->userRepository->getLoginInfo($username, $isEmail);
-
-            if (empty($loginInfo)) {
-                $response->message = "invalid username or password";
-                return $response;
+            $info = $this->userRepository->getLoginInfo($username, LoginFunctions::isEmail($username));
+            if (!$info || !LoginFunctions::verify($password, $info['passwordHash'])) {
+                return Response::error('invalid username or password', Response::FLAG_UNAUTHORIZED);
             }
-
-            $passwordHash = $loginInfo['passwordHash'];
-            if (LoginFunctions::verify($password, $passwordHash)) {
-                $response->flag    = Response::FLAG_SUCCESS;
-                $response->status  = Response::STATUS_SUCCESS;
-                $response->message = "login successful";
-                $pets = $this->userRepository->getPetsByOwner($loginInfo['userId']);
-                $loginInfo['userId'] = Uuid::bytesToString($loginInfo['userId']);
-                foreach ($pets as &$row) {
-                    if (isset($row['petId'])) {
-                        $row['petId'] = Uuid::bytesToString($row['petId']);
-                    }
-                }
-                unset($row);
-                $loginInfo['pets'] = $pets;
-                LoginFunctions::login($loginInfo);
-                $response->data = [
-                    "username" => $loginInfo["username"],
-                    "name"     => $loginInfo["firstName"],
-                    "surname"  => $loginInfo["surname"],
-                    "pets" => $loginInfo['pets']
-                ];
-                $this->userRepository->setLastLogin($loginInfo['userId']);
-            } else {
-                $response->message = "invalid username or password";
-            }
+            $pets = array_map([Uuid::class, 'serializeRow'], $this->userRepository->getPetsByOwner($info['userId']));
+            $this->userRepository->setLastLogin($info['userId']);
+            $info = Uuid::serializeRow($info);
+            LoginFunctions::login($info);
+            return Response::success('login successful', [
+                'userId' => $info['userId'], 'username' => $info['username'],
+                'firstName' => $info['firstName'], 'surname' => $info['surname'], 'pets' => $pets,
+            ]);
         } catch (PDOException $e) {
+            if ((string)$e->getCode() === '45000') {
+                return Response::error('invalid username or password', Response::FLAG_UNAUTHORIZED);
+            }
+            $response = new Response();
             DbErrorHandler::apply($e, $response);
+            return $response;
         }
-        return $response;
     }
 
     public function logout(): Response
     {
-        $response = new Response;
         LoginFunctions::logout();
-        $response->flag    = Response::FLAG_SUCCESS;
-        $response->status  = Response::STATUS_SUCCESS;
-        $response->message = "logout successful";
-        $response->data    = ["logout date" => date('Y-m-d H:i:s')];
-        return $response;
+        return Response::success('logout successful');
     }
 
-    public function createUser(array $user): Response
+    public function createUser(array $data): Response
     {
-        $response = new Response;
-
-        $shapeErrors = Validator::validateShape($user, [
-            'firstName'    => 'string',
-            'surname'      => 'string',
-            'username'     => 'string',
-            'email'        => 'string',
-            'phone'        => 'string',
-            'profilePhoto' => 'string',
-        ]);
-
-        if (!empty($shapeErrors)) {
-            $response->message = "there are some errors with your request";
-            $response->data    = $shapeErrors;
-            return $response;
-        }
-
-        $userData = $user;
-        $user = new User($userData);
-
-        if (isset($userData['password']) && is_string($userData['password'])) {
-            $user->setPassword($userData['password']);
-        }
-
-        $validationErrors = $user->validateParams();
-        if (!empty($validationErrors)) {
-            $response->message = "there are some errors with your request";
-            $response->data    = $validationErrors;
-            return $response;
-        }
-
-        try {
-            $user->userId = Uuid::v7Bytes();
-            $result = $this->userRepository->createUser($user);
-            if(isset($result['userId'])) $result['userId'] = Uuid::bytesToString($result['userId']);
-            $response->status  = Response::STATUS_SUCCESS;
-            $response->flag    = Response::FLAG_SUCCESS;
-            $response->message = "Thank you for joining us";
-            $response->data    = $result;
-        } catch (PDOException $e) {
-            DbErrorHandler::apply($e, $response);
-        }
-        return $response;
+        return $this->save($data, false);
     }
 
-    public function editUser(array $user): Response
+    public function editUser(array $data): Response
     {
-        $response = new Response;
+        return $this->save($data, true);
+    }
 
-        $shapeErrors = Validator::validateShape($user, [
-            'firstName'    => 'string',
-            'surname'      => 'string',
-            'username'     => 'string',
-            'email'        => 'string',
-            'phone'        => 'string',
-            'profilePhoto' => 'string',
-        ]);
-
-        if (!empty($shapeErrors)) {
-            $response->message = "there are some errors with your request";
-            $response->data    = $shapeErrors;
-            return $response;
+    private function save(array $data, bool $edit): Response
+    {
+        $schema = [
+            'firstName' => 'string', 'surname' => 'string', 'username' => 'string',
+            'email' => 'string', 'phone' => 'string?', 'profilePhoto' => 'string?', 'password' => 'string',
+        ];
+        if ($edit) $schema['userId'] = 'string';
+        $errors = Validator::validateShape($data, $schema);
+        foreach (array_diff(array_keys($data), array_keys($schema)) as $field) {
+            $errors[] = "unsupported field: $field";
         }
-
-        $userData = $user;
-        $user = new User($userData);
-
-        if (isset($userData['password']) && is_string($userData['password'])) {
-            $user->setPassword($userData['password']);
-        }
-        if (!isset($userData['userId'])) {
-            $response->message = "you must provide an id";
-            $response->data    = [];
-            return $response;
-        }
-
-        $validationErrors = $user->validateParams(true);
-        if (!empty($validationErrors)) {
-            $response->message = "there are some errors with your request";
-            $response->data    = $validationErrors;
-            return $response;
-        }
-
-        try {
-            $user->userId = Uuid::stringToBytes($user->userId);
-            $result = $this->userRepository->editUser($user);
-            if(isset($result['userId'])) $result['userId'] = Uuid::bytesToString($result['userId']);
-            $response->status  = Response::STATUS_SUCCESS;
-            $response->flag    = Response::FLAG_SUCCESS;
-            $response->message = "user updated successfully";
-            $response->data    = $result;
-        } catch (PDOException $e) {
-            DbErrorHandler::apply($e, $response);
-        }
-        return $response;
+        if ($edit && !Uuid::isValid($data['userId'] ?? null)) $errors[] = 'provide a valid userId';
+        if ($errors) return Response::error('there are some errors with your request', Response::FLAG_USER_ERROR, $errors);
+        $data = Validator::clean($data);
+        $user = new User($data);
+        if (isset($data['password'])) $user->setPassword($data['password']);
+        $errors = $user->validateParams($edit);
+        if ($errors) return Response::error('there are some errors with your request', Response::FLAG_USER_ERROR, $errors);
+        return $this->run(function () use ($user, $edit): array {
+            $user->userId = $edit ? Uuid::stringToBytes($user->userId) : Uuid::v7Bytes();
+            return Uuid::serializeRow($edit ? $this->userRepository->editUser($user) : $this->userRepository->createUser($user));
+        }, $edit ? 'user updated successfully' : 'Thank you for joining us');
     }
 
     public function deleteUser(string $userId): Response
     {
-        $response = new Response;
-        try {
-            $userId = Uuid::stringToBytes($userId);
-            $this->userRepository->deleteUser($userId);
-            $response->status  = Response::STATUS_SUCCESS;
-            $response->flag    = Response::FLAG_SUCCESS;
-            $response->message = "user deleted successfully";
-        } catch (PDOException $e) {
-            DbErrorHandler::apply($e, $response);
-        }
-        return $response;
+        return $this->run(function () use ($userId): array {
+            $this->userRepository->deleteUser(Uuid::stringToBytes($userId));
+            Auth::destroy();
+            return [];
+        }, 'user deleted successfully');
     }
 
     public function getUserByUsername(string $username): Response
     {
-        $response = new Response;
-        try {
-            $result = $this->userRepository->getByUsername($username);
-            if(isset($result['userId'])) $result['userId'] = Uuid::bytesToString($result['userId']);
-            $response->status  = Response::STATUS_SUCCESS;
-            $response->flag    = Response::FLAG_SUCCESS;
-            $response->message = "user found";
-            $response->data    = $result;
-        } catch (PDOException $e) {
-            DbErrorHandler::apply($e, $response);
-        }
-        return $response;
+        return $this->run(fn() => $this->publicProfile($this->userRepository->getByUsername($username)), 'user found');
     }
 
     public function getUserById(string $userId): Response
     {
-        $response = new Response;
-        try {
-            $userId = Uuid::stringToBytes($userId);
-            $result = $this->userRepository->getById($userId);
-            $response->status  = Response::STATUS_SUCCESS;
-            $response->flag    = Response::FLAG_SUCCESS;
-            $response->message = "user found";
-            $response->data    = $result;
-        } catch (PDOException $e) {
-            DbErrorHandler::apply($e, $response);
-        }
-        return $response;
+        return $this->run(fn() => $this->publicProfile($this->userRepository->getById(Uuid::stringToBytes($userId))), 'user found');
+    }
+
+    public function getProfile(string $userId): Response
+    {
+        return $this->run(function () use ($userId): array {
+            $bytes = Uuid::stringToBytes($userId);
+            $user = Uuid::serializeRow($this->userRepository->getById($bytes));
+            $user['pets'] = array_map([Uuid::class, 'serializeRow'], $this->userRepository->getPetsByOwner($bytes));
+            return $user;
+        }, 'profile retrieved');
+    }
+
+    private function publicProfile(array $user): array
+    {
+        return array_intersect_key(Uuid::serializeRow($user), array_flip([
+            'userId', 'firstName', 'surname', 'username', 'profilePhoto', 'creationDate',
+        ]));
     }
 
     public function getPetsByOwner(string $ownerId): Response
     {
-        $response = new Response;
+        return $this->run(fn() => array_map([Uuid::class, 'serializeRow'],
+            $this->userRepository->getPetsByOwner(Uuid::stringToBytes($ownerId))), 'Pets retrieved');
+    }
+
+    private function run(callable $action, string $message): Response
+    {
         try {
-            $results = $this->userRepository->getPetsByOwner($ownerId);
-            foreach ($results as &$row) {
-                if (isset($row['petId'])) {
-                    $row['petId'] = Uuid::bytesToString($row['petId']);
-                }
-                if (isset($row['ownerId'])) {
-                    $row['ownerId'] = Uuid::bytesToString($row['ownerId']);
-                }
-            }
-            unset($row);
-            $response->status  = Response::STATUS_SUCCESS;
-            $response->flag    = Response::FLAG_SUCCESS;
-            $response->message = "Pets retrieved";
-            $response->data    = $results;
+            return Response::success($message, $action());
         } catch (PDOException $e) {
+            $response = new Response();
             DbErrorHandler::apply($e, $response);
+            return $response;
+        } catch (InvalidArgumentException $e) {
+            return Response::error($e->getMessage());
         }
-        return $response;
     }
 }

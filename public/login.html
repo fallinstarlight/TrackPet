@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="es">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -7,55 +7,49 @@
   <link rel="stylesheet" href="styles/style.css" />
 </head>
 <body>
+<header class="site-header"><div class="site-nav"><a class="brand" href="index.html">Track<span>Pet</span></a><nav aria-label="Navegación principal"><a href="index.html">Comunidad</a><a href="new-report.html">Reportar pérdida</a><a href="sightings.html">Mis avistamientos</a><a href="about.html">El proyecto</a><a id="accountLink" href="login.html">Iniciar sesión</a></nav></div></header>
   <!-- Background image: full width, top half of the screen -->
   <div class="hero" aria-hidden="true"></div>
 
   <!-- Centered login form -->
   <main class="login-container">
     <form class="login-form" id="loginForm" novalidate>
-      <h1 class="login-form__title">Welcome back</h1>
-      <p class="login-form__subtitle">Log in to continue to your account</p>
+      <h1 class="login-form__title">Bienvenido de nuevo</h1>
+      <p class="login-form__subtitle">Ingresa para cuidar de tus mascotas</p>
 
       <div class="field">
-        <label for="identifier">Username or Email</label>
+        <label for="identifier">Usuario o correo</label>
         <input
           type="text"
           id="identifier"
           name="identifier"
           placeholder="you@example.com"
-          autocomplete="off"
+          autocomplete="username"
           required
         />
         <span class="field__error" id="identifierError"></span>
       </div>
 
       <div class="field">
-        <label for="password">Password</label>
+        <label for="password">Contraseña</label>
         <input
           type="password"
           id="password"
           name="password"
-          placeholder="Enter your password"
+          placeholder="Escribe tu contraseña"
           autocomplete="current-password"
           required
         />
         <span class="field__error" id="passwordError"></span>
       </div>
 
-      <div class="form-row">
-        <button type="button" class="btn btn--link" id="forgotPassword">
-          Forgot password?
-        </button>
-      </div>
-
-      <button type="submit" class="btn btn--primary">Log in</button>
-      <button type="button" class="btn btn--outline" id="signUp">Sign up</button>
+      <button type="submit" class="btn btn--primary">Iniciar sesión</button>
+      <a class="btn btn--outline" href="register.html">Crear cuenta</a>
 
       <p class="form-message" id="formMessage" role="status"></p>
     </form>
   </main>
 
   <script type="module" src="scripts/login.js"></script>
-  <script src="scripts/api/ApiRequest.js"></script>
 </body>
 </html>

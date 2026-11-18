@@ -51,11 +51,33 @@ class Uuid
     /** Convert a canonical UUID string to raw 16 bytes. */
     public static function stringToBytes(string $uuid): string
     {
-        $hex = str_replace('-', '', $uuid);
-        if (!ctype_xdigit($hex) || strlen($hex) !== 32) {
+        if (!self::isValid($uuid)) {
             throw new InvalidArgumentException('Invalid UUID string');
         }
-        return hex2bin($hex);
+        return hex2bin(str_replace('-', '', $uuid));
+    }
+
+    public static function isValid(mixed $uuid): bool
+    {
+        return is_string($uuid) && preg_match('/\A(?:[a-f0-9]{32}|[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})\z/i', $uuid) === 1;
+    }
+
+    public static function normalize(string $uuid): string
+    {
+        return self::bytesToString(self::stringToBytes($uuid));
+    }
+
+    /** Convert database identifiers before any JSON response. */
+    public static function serializeRow(array $row): array
+    {
+        foreach (['userId', 'petId', 'ownerId', 'reportId', 'sightingId', 'reporterId', 'clientRequestId'] as $key) {
+            if (isset($row[$key])) {
+                $row[$key] = strlen($row[$key]) === 16
+                    ? self::bytesToString($row[$key]) : self::normalize($row[$key]);
+            }
+        }
+        unset($row['passwordHash']);
+        return $row;
     }
 
     /** Convert raw 16 bytes to canonical UUID string. */

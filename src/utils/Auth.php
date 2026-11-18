@@ -4,7 +4,7 @@ namespace TrackPet\utils;
 
 class Auth
 {
-    private static $timeout = 7200; 
+    private static $timeout = 1800; 
 
     /* Start the session and check for timeout */
     public static function start()
@@ -12,8 +12,10 @@ class Auth
         if (session_status() === PHP_SESSION_NONE) {
             ini_set('session.cookie_httponly', 1);
             ini_set('session.use_only_cookies', 1);
-            ini_set('session.cookie_secure', isset($_SERVER['HTTPS']));
-            session_start();
+            ini_set('session.use_strict_mode', 1);
+            ini_set('session.cookie_samesite', 'Lax');
+            ini_set('session.cookie_secure', !empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off');
+            if (!session_start()) throw new \RuntimeException('Unable to start session');
         }
 
         self::checkTimeout();
@@ -61,7 +63,7 @@ class Auth
             );
         }
 
-        session_destroy();
+        if (session_status() === PHP_SESSION_ACTIVE) session_destroy();
     }
 
     public static function set($key, $value)
@@ -82,7 +84,7 @@ class Auth
     public static function requireLogIn(){
         if(!self::isLoggedIn()){
             http_response_code(401);
-            die(json_encode(["status"=> "Error", "message" => "Log in is needed to access this resource"]));
+            die(json_encode(["status"=> "error", "message" => "Log in is needed to access this resource", "data" => []]));
         }
     }
 }

@@ -47,6 +47,12 @@ class Upload
 
         $file = $_FILES[$fieldName];
 
+        if (!is_array($file) || !is_int($file['error'] ?? null)
+            || !is_string($file['name'] ?? null) || !is_string($file['tmp_name'] ?? null)
+            || !is_int($file['size'] ?? null)) {
+            throw new RuntimeException('Invalid file upload.');
+        }
+
         if ($file['error'] !== UPLOAD_ERR_OK) {
             throw new RuntimeException(
                 'Upload failed with error code ' . $file['error'] . '.'
@@ -118,7 +124,8 @@ class Upload
             throw new RuntimeException('File is not a valid image.');
         }
 
-        [$width, $height, $mime] = $info;
+        [$width, $height] = $info;
+        $mime = $info['mime'];
 
         if (!in_array($mime, self::ALLOWED_MIME, true)) {
             throw new RuntimeException("Image MIME type '$mime' is not allowed.");

@@ -1,3 +1,5 @@
+-- Step 2 of 2: install the routines used by the TrackPet backend.
+SET NAMES utf8mb4 COLLATE utf8mb4_0900_ai_ci;
 USE TrackPet;
 DELIMITER $$
 
@@ -57,7 +59,7 @@ BEGIN
       NULLIF(COALESCE(inPhone, ''), ''),
       NULLIF(COALESCE(inProfilePhoto, ''), '')
     );
-    SELECT userId, firstName, surname, username FROM Users WHERE userId = LAST_INSERT_ID();
+    SELECT userId, firstName, surname, username FROM Users WHERE userId = inUserId;
   END IF;
 END $$
 
@@ -92,7 +94,7 @@ BEGIN
       username     = COALESCE(NULLIF(inUsername, ''), username),
       email        = COALESCE(NULLIF(inEmail, ''), email),
       passwordHash = COALESCE(NULLIF(inPasswordHash, ''), passwordHash),
-      phone        = COALESCE(NULLIF(inPhone, ''), phone),
+      phone        = IF(inPhone IS NULL, phone, NULLIF(inPhone, '')),
       profilePhoto = COALESCE(NULLIF(inProfilePhoto, ''), profilePhoto)
     WHERE userId = inId;
 
@@ -103,13 +105,21 @@ END $$
 DROP PROCEDURE IF EXISTS deleteUser $$
 CREATE PROCEDURE deleteUser(IN inId BINARY(16))
 BEGIN
-  IF NOT EXISTS (SELECT 1 FROM Users WHERE userId = inId) THEN
+  DECLARE currentStatus VARCHAR(8) DEFAULT NULL;
+  DECLARE EXIT HANDLER FOR SQLEXCEPTION BEGIN ROLLBACK; RESIGNAL; END;
+  START TRANSACTION;
+  SELECT status INTO currentStatus FROM Users WHERE userId = inId FOR UPDATE;
+  IF currentStatus IS NULL THEN
     SIGNAL SQLSTATE '45003' SET MESSAGE_TEXT = 'User does not exist';
-  ELSEIF EXISTS (SELECT 1 FROM Users WHERE userId = inId AND status = 'inactive') THEN
+  ELSEIF currentStatus <> 'active' THEN
     SIGNAL SQLSTATE '45004' SET MESSAGE_TEXT = 'User is not available';
-  ELSE
-    UPDATE Users SET status = 'inactive' WHERE userId = inId;
   END IF;
+  UPDATE Pets SET isLost = 0 WHERE ownerId = inId AND isLost = 1;
+  UPDATE LostReports r JOIN Pets p ON p.petId = r.petId
+    SET r.status = 'cancelled', r.activePetId = NULL, r.closedAt = UTC_TIMESTAMP(6), r.closureReason = 'Cuenta dada de baja'
+    WHERE p.ownerId = inId AND r.status = 'open';
+  UPDATE Users SET status = 'inactive' WHERE userId = inId;
+  COMMIT;
 END $$
 
 DROP PROCEDURE IF EXISTS getUserByUsername $$
@@ -150,7 +160,8 @@ CREATE PROCEDURE createPet(
   IN inPetHeight DOUBLE(10, 2),
   IN inPetLenght DOUBLE(10, 2),
   IN inPetDescription VARCHAR(500),
-  IN inOwnerId BINARY(16)
+  IN inOwnerId BINARY(16),
+  IN inPetPhoto VARCHAR(350)
 )
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM Users WHERE userId = inOwnerId AND status = 'active') THEN
@@ -160,15 +171,16 @@ BEGIN
   ELSE
     INSERT INTO Pets (
       petId, petName, petSpecies, petColour, petWeight,
-      petHeight, petLenght, petDescription, ownerId
+      petHeight, petLenght, petDescription, ownerId, petPhoto
     ) VALUES (
       inPetId, inPetName, inPetSpecies, inPetColour,
       inPetWeight, inPetHeight, inPetLenght,
       NULLIF(COALESCE(inPetDescription, ''), ''),
-      inOwnerId
+      inOwnerId,
+      inPetPhoto
     );
     SELECT petId, petName, petSpecies, petColour, petWeight,
-           petHeight, petLenght, isLost, petDescription, ownerId,
+           petHeight, petLenght, isLost, petDescription, petPhoto, ownerId,
            isActive, creationDate, modificationDate
     FROM Pets WHERE petId = inPetId;
   END IF;
@@ -177,79 +189,123 @@ END $$
 DROP PROCEDURE IF EXISTS editPet $$
 CREATE PROCEDURE editPet(
   IN inPetId BINARY(16),
+  IN inOwnerId BINARY(16),
   IN inPetName VARCHAR(100),
+  IN inPetSpecies VARCHAR(100),
   IN inPetColour VARCHAR(100),
   IN inPetWeight DOUBLE(10, 2),
   IN inPetHeight DOUBLE(10, 2),
   IN inPetLenght DOUBLE(10, 2),
-  IN inPetDescription VARCHAR(500)
+  IN inPetDescription VARCHAR(500),
+  IN inPetPhoto VARCHAR(350)
 )
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM Pets WHERE petId = inPetId AND isActive = 1) THEN
     SIGNAL SQLSTATE '45008' SET MESSAGE_TEXT = 'Pet does not exist or is not active';
+  ELSEIF NOT EXISTS (SELECT 1 FROM Pets p JOIN Users u ON p.ownerId = u.userId
+    WHERE p.petId = inPetId AND p.ownerId = inOwnerId AND u.status = 'active') THEN
+    SIGNAL SQLSTATE '45011' SET MESSAGE_TEXT = 'You do not own this pet';
   ELSE
     UPDATE Pets SET
+      petSpecies     = COALESCE(NULLIF(inPetSpecies, ''), petSpecies),
+      petPhoto       = COALESCE(inPetPhoto, petPhoto),
       petName        = COALESCE(NULLIF(inPetName, ''), petName),
       petColour      = COALESCE(NULLIF(inPetColour, ''), petColour),
       petWeight      = COALESCE(inPetWeight, petWeight),
       petHeight      = COALESCE(inPetHeight, petHeight),
       petLenght      = COALESCE(inPetLenght, petLenght),
-      petDescription = COALESCE(NULLIF(inPetDescription, ''), petDescription)
-    WHERE petId = inPetId;
+      petDescription = COALESCE(inPetDescription, petDescription)
+    WHERE petId = inPetId AND ownerId = inOwnerId AND isActive = 1
+      AND EXISTS (SELECT 1 FROM Users WHERE userId = inOwnerId AND status = 'active');
 
+    IF NOT EXISTS (SELECT 1 FROM Pets WHERE petId = inPetId AND ownerId = inOwnerId AND isActive = 1) THEN
+      SIGNAL SQLSTATE '45011' SET MESSAGE_TEXT = 'You do not own this pet';
+    END IF;
     SELECT petId, petName, petSpecies, petColour, petWeight,
-           petHeight, petLenght, isLost, petDescription, ownerId,
+           petHeight, petLenght, isLost, petDescription, petPhoto, ownerId,
            isActive, creationDate, modificationDate
-    FROM Pets WHERE petId = inPetId;
+    FROM Pets WHERE petId = inPetId AND ownerId = inOwnerId AND isActive = 1
+      AND EXISTS (SELECT 1 FROM Users WHERE userId = inOwnerId AND status = 'active');
   END IF;
 END $$
 
 DROP PROCEDURE IF EXISTS changePetOwnership $$
-CREATE PROCEDURE changePetOwnership(
-  IN inPetId BINARY(16),
-  IN oldOwnerId BINARY(16),
-  IN newOwnerId BINARY(16)
-)
+CREATE PROCEDURE changePetOwnership(IN inPetId BINARY(16), IN oldOwnerId BINARY(16), IN newOwnerId BINARY(16))
 BEGIN
-  IF NOT EXISTS (SELECT 1 FROM Users WHERE userId = oldOwnerId) THEN
+  DECLARE ownerStatus VARCHAR(8) DEFAULT NULL;
+  DECLARE currentOwner BINARY(16) DEFAULT NULL;
+  DECLARE petActive BOOLEAN DEFAULT FALSE;
+  DECLARE EXIT HANDLER FOR SQLEXCEPTION BEGIN ROLLBACK; RESIGNAL; END;
+  START TRANSACTION;
+  SELECT status INTO ownerStatus FROM Users WHERE userId = oldOwnerId FOR UPDATE;
+  IF ownerStatus IS NULL OR ownerStatus <> 'active' THEN
     SIGNAL SQLSTATE '45006' SET MESSAGE_TEXT = 'Owner does not exist';
-  ELSEIF NOT EXISTS (SELECT 1 FROM Users WHERE userId = newOwnerId) THEN
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM Users WHERE userId = newOwnerId AND status = 'active') THEN
     SIGNAL SQLSTATE '45009' SET MESSAGE_TEXT = 'New owner does not exist';
-  ELSEIF NOT EXISTS (SELECT 1 FROM Pets WHERE petId = inPetId AND isActive = 1) THEN
+  END IF;
+  SELECT ownerId, isActive INTO currentOwner, petActive FROM Pets WHERE petId = inPetId FOR UPDATE;
+  IF currentOwner IS NULL OR NOT petActive THEN
     SIGNAL SQLSTATE '45008' SET MESSAGE_TEXT = 'Pet does not exist or is not active';
+  ELSEIF currentOwner <> oldOwnerId THEN
+    SIGNAL SQLSTATE '45011' SET MESSAGE_TEXT = 'You do not own this pet';
   ELSEIF oldOwnerId = newOwnerId THEN
     SIGNAL SQLSTATE '45010' SET MESSAGE_TEXT = 'Both owner IDs are the same';
-  ELSE
-    UPDATE Pets SET ownerId = newOwnerId WHERE petId = inPetId;
+  ELSEIF EXISTS (SELECT 1 FROM LostReports WHERE activePetId = inPetId) THEN
+    SIGNAL SQLSTATE '45012' SET MESSAGE_TEXT = 'Close the active report before transferring this pet';
   END IF;
+  UPDATE Pets SET ownerId = newOwnerId WHERE petId = inPetId;
+  COMMIT;
 END $$
 
 DROP PROCEDURE IF EXISTS deletePet $$
-CREATE PROCEDURE deletePet(IN inPetId BINARY(16))
+CREATE PROCEDURE deletePet(IN inPetId BINARY(16), IN inOwnerId BINARY(16))
 BEGIN
-  IF NOT EXISTS (SELECT 1 FROM Pets WHERE petId = inPetId AND isActive = 1) THEN
+  DECLARE ownerStatus VARCHAR(8) DEFAULT NULL;
+  DECLARE currentOwner BINARY(16) DEFAULT NULL;
+  DECLARE petActive BOOLEAN DEFAULT FALSE;
+  DECLARE EXIT HANDLER FOR SQLEXCEPTION BEGIN ROLLBACK; RESIGNAL; END;
+  START TRANSACTION;
+  SELECT status INTO ownerStatus FROM Users WHERE userId = inOwnerId FOR UPDATE;
+  SELECT ownerId, isActive INTO currentOwner, petActive FROM Pets WHERE petId = inPetId FOR UPDATE;
+  IF currentOwner IS NULL OR NOT petActive THEN
     SIGNAL SQLSTATE '45008' SET MESSAGE_TEXT = 'Pet does not exist or is already inactive';
-  ELSE
-    UPDATE Pets SET isActive = 0 WHERE petId = inPetId;
+  ELSEIF currentOwner <> inOwnerId OR ownerStatus IS NULL OR ownerStatus <> 'active' THEN
+    SIGNAL SQLSTATE '45011' SET MESSAGE_TEXT = 'You do not own this pet';
   END IF;
+  UPDATE LostReports SET status = 'cancelled', activePetId = NULL, closedAt = UTC_TIMESTAMP(6), closureReason = 'Mascota dada de baja'
+    WHERE activePetId = inPetId;
+  UPDATE Pets SET isActive = 0, isLost = 0 WHERE petId = inPetId;
+  COMMIT;
 END $$
 
 DROP PROCEDURE IF EXISTS toggleLostStatus $$
-CREATE PROCEDURE toggleLostStatus(
-  IN inPetId BINARY(16),
-  IN inOwnerId BINARY(16)
-)
+CREATE PROCEDURE toggleLostStatus(IN inPetId BINARY(16), IN inOwnerId BINARY(16), IN newReportId BINARY(16))
 BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM Pets pt
-    JOIN Users us ON pt.ownerId = us.userId
-    WHERE pt.ownerId = inOwnerId AND pt.petId = inPetId AND pt.isActive = 1
-  ) THEN
+  DECLARE ownerStatus VARCHAR(8) DEFAULT NULL;
+  DECLARE currentOwner BINARY(16) DEFAULT NULL;
+  DECLARE petActive BOOLEAN DEFAULT FALSE;
+  DECLARE activeReport BINARY(16) DEFAULT NULL;
+  DECLARE EXIT HANDLER FOR SQLEXCEPTION BEGIN ROLLBACK; RESIGNAL; END;
+  START TRANSACTION;
+  SELECT status INTO ownerStatus FROM Users WHERE userId = inOwnerId FOR UPDATE;
+  SELECT ownerId, isActive INTO currentOwner, petActive FROM Pets WHERE petId = inPetId FOR UPDATE;
+  IF currentOwner IS NULL OR NOT petActive OR currentOwner <> inOwnerId OR ownerStatus IS NULL OR ownerStatus <> 'active' THEN
     SIGNAL SQLSTATE '45011' SET MESSAGE_TEXT = 'User, pet or ownership does not exist';
-  ELSE
-    UPDATE Pets SET isLost = NOT isLost WHERE petId = inPetId;
-    SELECT isLost FROM Pets WHERE petId = inPetId;
   END IF;
+  SELECT (SELECT reportId FROM LostReports WHERE activePetId = inPetId) INTO activeReport;
+  IF activeReport IS NULL THEN
+    INSERT INTO LostReports (reportId, petId, ownerId, activePetId, lostAt, lastSeenArea)
+      VALUES (newReportId, inPetId, inOwnerId, inPetId, UTC_TIMESTAMP(6), 'Zona por especificar');
+    UPDATE Pets SET isLost = 1 WHERE petId = inPetId;
+    SET activeReport = newReportId;
+  ELSE
+    UPDATE LostReports SET status = 'recovered', activePetId = NULL, closedAt = UTC_TIMESTAMP(6), closureReason = 'Recuperada por su dueño'
+      WHERE reportId = activeReport;
+    UPDATE Pets SET isLost = 0 WHERE petId = inPetId;
+  END IF;
+  COMMIT;
+  SELECT isLost, activeReport AS reportId FROM Pets WHERE petId = inPetId;
 END $$
 
 DROP PROCEDURE IF EXISTS getLostStatus $$
@@ -269,7 +325,7 @@ BEGIN
     SIGNAL SQLSTATE '45008' SET MESSAGE_TEXT = 'Pet does not exist';
   ELSE
     SELECT petId, petName, petSpecies, petColour, petWeight,
-           petHeight, petLenght, isLost, petDescription, ownerId,
+           petHeight, petLenght, isLost, petDescription, petPhoto, ownerId,
            isActive, creationDate, modificationDate
     FROM Pets WHERE petId = inPetId AND isActive = 1;
   END IF;
@@ -281,8 +337,9 @@ BEGIN
   IF NOT EXISTS (SELECT 1 FROM Users WHERE userId = inOwnerId AND status = 'active') THEN
     SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'User does not exist';
   ELSE
-    SELECT petId, petName, petSpecies, petColour, petWeight,
-           petHeight, petLenght, isLost, petDescription, ownerId,
+    SELECT (SELECT r.reportId FROM LostReports r WHERE r.activePetId = Pets.petId) AS reportId,
+           petId, petName, petSpecies, petColour, petWeight,
+           petHeight, petLenght, isLost, petDescription, petPhoto, ownerId,
            isActive, creationDate, modificationDate
     FROM Pets WHERE ownerId = inOwnerId AND isActive = 1;
   END IF;

@@ -26,7 +26,9 @@ class UserRepository
     public function setLastLogin(string $userId): void
     {
         $query = $this->CONN->prepare("UPDATE Users SET lastLogin = ? WHERE userId = ?");
-        $query->execute([date('Y-m-d H:i:s'), $userId]);
+        $query->bindValue(1, date('Y-m-d H:i:s'));
+        $query->bindValue(2, $userId, PDO::PARAM_LOB);
+        $query->execute();
     }
 
     public function createUser(User $user): array
@@ -98,5 +100,19 @@ class UserRepository
         $results = $query->fetchAll();
         $query->closeCursor();
         return $results ?: [];
+    }
+    public function isActive(string $userId): bool
+    {
+        $query = $this->CONN->prepare("SELECT 1 FROM Users WHERE userId = ? AND status = 'active'");
+        $query->bindValue(1, $userId, PDO::PARAM_LOB);
+        $query->execute();
+        return (bool)$query->fetchColumn();
+    }
+    public function getIdentity(string $userId): array
+    {
+        $query = $this->CONN->prepare("SELECT username FROM Users WHERE userId = ? AND status = 'active'");
+        $query->bindValue(1, $userId, PDO::PARAM_LOB);
+        $query->execute();
+        return $query->fetch() ?: [];
     }
 }

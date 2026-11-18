@@ -1,7 +1,24 @@
+# Local configuration and credentials
 *.env
+.env.*
+!.env.example
+*.keystore
+*.jks
 
-node_modules/
+# Installed dependencies and generated web assets
+/node_modules/
+/vendor/
+/public/scripts/
+/public/vendor/
 
-vendor/
+# Uploaded photos
+/public/assets/img/uploads/*
+!/public/assets/img/uploads/.gitkeep
 
-public/scripts/*
+# Local IDE settings
+.idea/
+*.iml
+
+tests/*
+
+apk/*

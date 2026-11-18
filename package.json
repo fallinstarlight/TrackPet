@@ -1,5 +1,16 @@
 {
   "devDependencies": {
+    "@types/leaflet": "1.9.21",
     "typescript": "^7.0.2"
+  },
+  "name": "trackpet",
+  "private": true,
+  "scripts": {
+    "build": "tsc && node scripts/copy-assets.mjs",
+    "dev": "node scripts/copy-assets.mjs && tsc --watch",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "leaflet": "1.9.4"
   }
 }

@@ -28,7 +28,7 @@ class User
     public function __construct(array $data)
     {
         foreach ($data as $key => $value) {
-            if (property_exists($this, $key) && ($key !== 'password' || $key !== 'passwordHash')) {
+            if (in_array($key, ['userId', 'firstName', 'surname', 'username', 'email', 'phone', 'profilePhoto'], true)) {
                 $this->$key = $value;
             }
         }
@@ -53,12 +53,12 @@ class User
             'email'     => 50,
         ];
 
-        if ($this->password !== null && $this->validatePassword()) {
-            $this->hashPassword();
-        }
-
-        if (!isset($this->passwordHash) || $this->passwordHash === '') {
-            $errors[] = "please provide a password at least 8 characters long, one uppercase, one lowercase, a number and a special character";
+        if (!$isEdit || $this->password !== null) {
+            if ($this->password === null || !$this->validatePassword()) {
+                $errors[] = "please provide a password at least 8 characters long, one uppercase, one lowercase, a number and a special character";
+            } else {
+                $this->hashPassword();
+            }
         }
 
         if (!$isEdit) {
@@ -76,9 +76,19 @@ class User
         }
 
         foreach ($maxLengths as $field => $max) {
+            if ($isEdit && in_array($field, $required, true) && $this->$field === '') {
+                $errors[] = "$field cannot be empty";
+            }
             if (isset($this->$field) && mb_strlen($this->$field) > $max) {
                 $errors[] = "$field exceeds $max char limit";
             }
+        }
+
+        if ($this->phone !== null && $this->phone !== '' && !preg_match('/\A\+?[0-9 ()-]{7,15}\z/', $this->phone)) {
+            $errors[] = 'phone must be a valid phone number';
+        }
+        if ($this->profilePhoto !== null && !preg_match('/\Aassets\/img\/uploads\/[a-f0-9]{32}\.(?:jpg|jpeg|png|gif|webp)\z/', $this->profilePhoto)) {
+            $errors[] = 'profilePhoto must be an uploaded image path';
         }
 
         return $errors;

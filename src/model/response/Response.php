@@ -13,6 +13,10 @@ class Response{
     public const FLAG_NOT_FOUND = 1;
     public const FLAG_USER_ERROR = 2;
     public const FLAG_SERVER_ERROR = 3;
+    public const FLAG_FORBIDDEN = 4;
+    public const FLAG_UNAUTHORIZED = 5;
+    public const FLAG_CONFLICT = 6;
+    public const FLAG_RATE_LIMIT = 7;
 
     public const STATUS_SUCCESS = "success";
     public const STATUS_ERROR = "error";
@@ -28,5 +32,23 @@ class Response{
         $this->flag = self::FLAG_USER_ERROR;
         $this->message = "";
         $this->data = [];
+    }
+    public static function success(string $message, array $data = []): self
+    {
+        $response = new self();
+        $response->status = self::STATUS_SUCCESS;
+        $response->flag = self::FLAG_SUCCESS;
+        $response->message = $message;
+        $response->data = $data;
+        return $response;
+    }
+
+    public static function error(string $message, int $flag = self::FLAG_USER_ERROR, array $data = []): self
+    {
+        $response = new self();
+        $response->message = $message;
+        $response->flag = $flag;
+        $response->data = $data;
+        return $response;
     }
 }

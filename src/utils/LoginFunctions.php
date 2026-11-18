@@ -20,7 +20,7 @@ class LoginFunctions{
         Auth::set('name', $data['firstName']);
         Auth::set('surname', $data['surname']);
         Auth::set('username', $data['username']);
-        Auth::set('pets', $data['pets']);
+
     }
 
     public static function logout()

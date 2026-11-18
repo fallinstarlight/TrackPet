@@ -24,6 +24,7 @@ class DbErrorHandler
             '45009' => 'New owner does not exist',
             '45010' => 'Both owner IDs are the same',
             '45011' => 'User, pet or ownership does not exist',
+            '45012' => 'Cierra el reporte activo antes de transferir la mascota.',
             default => null,
         };
     }
@@ -45,13 +46,23 @@ class DbErrorHandler
     public static function apply(PDOException $e, Response $response): bool
     {
         if (self::isCustom($e)) {
-            $response->flag    = Response::FLAG_USER_ERROR;
+            $response->flag = match ((string)$e->getCode()) {
+                '45000', '45003', '45006', '45008', '45009' => Response::FLAG_NOT_FOUND,
+                '45001', '45002', '45005', '45007', '45012' => Response::FLAG_CONFLICT,
+                '45004', '45011' => Response::FLAG_FORBIDDEN,
+                default => Response::FLAG_USER_ERROR,
+            };
             $response->status  = Response::STATUS_ERROR;
             $response->message = self::customMessage((string)$e->getCode())
-                ?? $e->getMessage();
+                ?? 'Invalid request';
             return true;
         }
 
+        if ((string)$e->getCode() === '23000' && ($e->errorInfo[1] ?? null) === 1062) {
+            $response->flag = Response::FLAG_CONFLICT;
+            $response->message = 'A unique value is already in use';
+            return true;
+        }
         // Generic / sensitive error — do NOT expose $e->getMessage()
         error_log('[DB ERROR] ' . $e->getMessage());
         $response->flag    = Response::FLAG_SERVER_ERROR;

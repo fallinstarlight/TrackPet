@@ -5,7 +5,8 @@
     "require": {
         "php": ">=8.1",
         "ext-pdo": "*",
-        "ext-mbstring": "*"
+        "ext-mbstring": "*",
+        "ext-pdo_mysql": "*"
     },
     "autoload": {
         "psr-4": {

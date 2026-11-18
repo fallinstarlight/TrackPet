@@ -35,7 +35,7 @@ class PetRepository
      */
     public function create(Pet $pet): array
     {
-        $query = $this->CONN->prepare("CALL createPet(?, ?, ?, ?, ?, ?, ?, ?, ?)");
+        $query = $this->CONN->prepare("CALL createPet(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
         $query->bindValue(1, $pet->petId, PDO::PARAM_LOB);
         $query->bindValue(2, $pet->petName);
         $query->bindValue(3, $pet->petSpecies);
@@ -44,7 +44,8 @@ class PetRepository
         $query->bindValue(6, $pet->petHeight);
         $query->bindValue(7, $pet->petLenght);
         $query->bindValue(8, $pet->petDescription);
-        $query->bindValue(9, $pet->ownerId, PDO::PARAM_INT);
+        $query->bindValue(9, $pet->ownerId, PDO::PARAM_LOB);
+        $query->bindValue(10, $pet->petPhoto);
         $query->execute();
         $result = $query->fetch();
         $query->closeCursor();
@@ -66,14 +67,17 @@ class PetRepository
      */
     public function edit(Pet $pet): array
     {
-        $query = $this->CONN->prepare("CALL editPet(?, ?, ?, ?, ?, ?, ?)");
+        $query = $this->CONN->prepare("CALL editPet(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
         $query->bindValue(1, $pet->petId, PDO::PARAM_LOB);
-        $query->bindValue(2, $pet->petName);
-        $query->bindValue(3, $pet->petColour);
-        $query->bindValue(4, $pet->petWeight);
-        $query->bindValue(5, $pet->petHeight);
-        $query->bindValue(6, $pet->petLenght);
-        $query->bindValue(7, $pet->petDescription);
+        $query->bindValue(2, $pet->ownerId, PDO::PARAM_LOB);
+        $query->bindValue(3, $pet->petName);
+        $query->bindValue(4, $pet->petSpecies);
+        $query->bindValue(5, $pet->petColour);
+        $query->bindValue(6, $pet->petWeight);
+        $query->bindValue(7, $pet->petHeight);
+        $query->bindValue(8, $pet->petLenght);
+        $query->bindValue(9, $pet->petDescription);
+        $query->bindValue(10, $pet->petPhoto);
         $query->execute();
         $result = $query->fetch();
         $query->closeCursor();
@@ -89,10 +93,11 @@ class PetRepository
      * 
      * The deletion is a soft delete, it won't remove the database row, it will rather just set the pet status to 'inactive'
      */
-    public function delete(string $petIdBytes): void
+    public function delete(string $petIdBytes, string $ownerId): void
     {
-        $query = $this->CONN->prepare("CALL deletePet(?)");
+        $query = $this->CONN->prepare("CALL deletePet(?, ?)");
         $query->bindValue(1, $petIdBytes, PDO::PARAM_LOB);
+        $query->bindValue(2, $ownerId, PDO::PARAM_LOB);
         $query->execute();
         $query->closeCursor();
     }
@@ -109,9 +114,10 @@ class PetRepository
 
     public function toggleLost(string $petIdBytes, string $ownerId): array
     {
-        $query = $this->CONN->prepare("CALL toggleLostStatus(?, ?)");
+        $query = $this->CONN->prepare("CALL toggleLostStatus(?, ?, ?)");
         $query->bindValue(1, $petIdBytes, PDO::PARAM_LOB);
         $query->bindValue(2, $ownerId, PDO::PARAM_LOB);
+        $query->bindValue(3, \TrackPet\utils\Uuid::v7Bytes(), PDO::PARAM_LOB);
         $query->execute();
         $result = $query->fetch();
         $query->closeCursor();
@@ -138,10 +144,10 @@ class PetRepository
         return $result ?: [];
     }
 
-    public function getByOwner(int $ownerId): array
+    public function getByOwner(string $ownerId): array
     {
         $query = $this->CONN->prepare("CALL getPetsByOwner(?)");
-        $query->bindValue(1, $ownerId, PDO::PARAM_INT);
+        $query->bindValue(1, $ownerId, PDO::PARAM_LOB);
         $query->execute();
         $results = $query->fetchAll();
         $query->closeCursor();

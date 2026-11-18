@@ -11,5 +11,6 @@ interface IUserService
     public function deleteUser(string $id): Response;
     public function getUserByUsername(string $username): Response;
     public function getUserById(string $id): Response;
+    public function getProfile(string $userId): Response;
     public function getPetsByOwner(string $id): Response;
 }

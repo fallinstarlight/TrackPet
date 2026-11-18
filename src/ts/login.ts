@@ -1,14 +1,17 @@
+import { safeNext, initNavigation } from './shared/ui.js';
 import { ApiRequest } from './api/ApiRequest.js';
 
+void initNavigation();
 interface LoginBody { username: string, password: string };
 interface LoginResponse { 
     status: string, 
     message: string,
     data: { 
+        userId: string,
         firstName: string, 
         surname: string, 
         username: string,
-        pets: {} } 
+        pets: unknown[] } 
     };
 
 const form = document.getElementById('loginForm');
@@ -17,8 +20,6 @@ const passwordInput = document.getElementById('password');
 const identifierError = document.getElementById('identifierError');
 const passwordError = document.getElementById('passwordError');
 const formMessage = document.getElementById('formMessage');
-const forgotPassword = document.getElementById('forgotPassword');
-const signUp = document.getElementById('signUp');
 
 form?.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -31,22 +32,25 @@ form?.addEventListener('submit', async (e) => {
         const login = new ApiRequest<LoginResponse, LoginBody>(
             'login', 'POST', { username: identifier.value, password: passwordInput.value }
         );
+        const button = form?.querySelector('button[type=submit]');
+        if (button instanceof HTMLButtonElement) button.disabled = true;
         const result = await login.send();
+        if (button instanceof HTMLButtonElement) button.disabled = false;
         if (result.status === 'success') {
-            setFormMessage("login succesful, redirecting...");
+            setFormMessage("Sesión iniciada. Abriendo tu cuenta…");
             setTimeout(() => {
-                window.location.replace("profile.html");
+                window.location.replace(safeNext());
             }, 700);
         }
         else{
             if(result.message)
                 setFormMessage(result.message, true);
             else
-                setFormMessage("there was an unexpected error", true);
+                setFormMessage("No pudimos iniciar sesión.", true);
         }
     }
     else {
-        setFormMessage("Please provide an username and password", true);
+        setFormMessage("Proporciona tu usuario y contraseña.", true);
     }
 
 });

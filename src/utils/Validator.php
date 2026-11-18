@@ -10,8 +10,7 @@ class Validator
      * Allowed types: 'string', 'int', 'float', 'bool'
      *
      * Fields not present in $data are skipped (so optional fields pass).
-     * A value of null is always accepted — the business-rule validator
-     * decides whether null is legal for a given field.
+     * Null is accepted only for types suffixed with '?'.
      *
      * Returns an array of human-readable error strings (empty = OK).
      */
@@ -25,7 +24,7 @@ class Validator
             }
             $value = $data[$field];
 
-            if ($value === null) {
+            if ($value === null && str_ends_with($expectedType, '?')) {
                 continue;
             }
 
@@ -40,12 +39,22 @@ class Validator
 
     private static function matchesType(mixed $value, string $expected): bool
     {
-        return match ($expected) {
+        return match (rtrim($expected, '?')) {
             'string' => is_string($value),
             'int'    => is_int($value),
             'float'  => is_float($value) || is_int($value), // int is a legal float
             'bool'   => is_bool($value),
             default  => false,
         };
+    }
+
+    public static function clean(array $data): array
+    {
+        foreach ($data as $key => $value) {
+            if (is_string($value) && !in_array($key, ['password', 'userId', 'petId', 'ownerId'], true)) {
+                $data[$key] = (new Sanitizer($value, true, $key !== 'petDescription'))->cleanString();
+            }
+        }
+        return $data;
     }
 }
